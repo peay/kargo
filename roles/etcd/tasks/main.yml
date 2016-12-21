@@ -15,6 +15,9 @@
 - include: refresh_config.yml
   when: is_etcd_master
 
+# Reload systemd before starting service
+- meta: flush_handlers
+
 - name: Ensure etcd is running
   service:
     name: etcd
