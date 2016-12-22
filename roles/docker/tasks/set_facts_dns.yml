@@ -1,5 +1,19 @@
 ---
 
+- name: check minimum docker version. You need at least docker version >= 1.12 for resolvconf_mode=docker_dns
+  shell: docker version -f "{{ '{{' }}.Server.Version{{ '}}' }}"
+  register: docker_version
+  failed_when: docker_version.stdout|version_compare('1.13', '<')
+
+- name: set dns server for docker
+  set_fact:
+    docker_dns_servers: |-
+      {%- if dns_mode == 'kubedns' -%}
+        {{ [ skydns_server ] }}
+      {%- elif dns_mode == 'dnsmasq_kubedns' -%}
+        {{ [ dns_server ] }}
+      {%- endif -%}
+
 - name: set base docker dns facts
   set_fact:
     docker_dns_servers:
@@ -12,21 +26,22 @@
       - timeout:2
       - attempts:2
 
-- name: add upstream dns servers
+- name: add upstream dns servers (only when dnsmasq is not used)
   set_fact:
     docker_dns_servers: "{{ docker_dns_servers + upstream_dns_servers|default([]) }}"
+  when: dns_mode == 'kubedns'
 
 - name: add global searchdomains
   set_fact:
     docker_dns_search_domains: "{{ docker_dns_search_domains + searchdomains|default([]) }}"
 
 - name: check system nameservers
-  shell: grep "^nameserver" /etc/resolv.conf | sed 's/nameserver\s*//'
+  shell: grep "^nameserver" /etc/resolv.conf | sed 's/^nameserver\s*//'
   changed_when: False
   register: system_nameservers
 
 - name: check system search domains
-  shell: grep "^search" /etc/resolv.conf | sed 's/search\s*//'
+  shell: grep "^search" /etc/resolv.conf | sed 's/^search\s*//'
   changed_when: False
   register: system_search_domains
 
@@ -39,3 +54,11 @@
   set_fact:
     docker_dns_search_domains: "{{ docker_dns_search_domains + [item] }}"
   with_items: "{{ system_search_domains.stdout_lines|default([]) }}"
+
+- name: check number of nameservers
+  fail: msg="Too many nameservers"
+  when: docker_dns_servers|length > 3
+
+- name: check number of search domains
+  fail: msg="Too many search domains"
+  when: docker_dns_search_domains|length > 6

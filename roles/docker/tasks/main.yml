@@ -15,7 +15,7 @@
   tags: facts
 
 - include: set_facts_dns.yml
-  when: dns_mode == 'docker_kubedns'
+  when: resolvconf_mode == 'docker_dns'
   tags: facts
 
 - name: check for minimum kernel version
